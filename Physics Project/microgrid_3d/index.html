@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Computing Optimization Engine | Rural Microgrid 3D Digital Twin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Three.js and Postprocessing Libraries (Local with CDN Fallback) -->
+    <script src="libs/three.min.js"></script>
+    <script>
+        if (typeof THREE === 'undefined') {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>');
+        }
+    </script>
+    <script src="libs/OrbitControls.js"></script>
+    <script>
+        if (typeof THREE.OrbitControls === 'undefined') {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>');
+        }
+    </script>
+    <script src="libs/EffectComposer.js"></script>
+    <script src="libs/RenderPass.js"></script>
+    <script src="libs/ShaderPass.js"></script>
+    <script src="libs/CopyShader.js"></script>
+    <script src="libs/LuminosityHighPassShader.js"></script>
+    <script src="libs/UnrealBloomPass.js"></script>
+</head>
+<body>
+    <!-- 3D WebGL Canvas Viewport -->
+    <div id="canvas-container"></div>
+
+    <!-- 3D Projected Floating Energy Flow Panels (Silent Cinematic Energy Flow) -->
+    <div id="floating-energy-panels-container"></div>
+
+    <!-- UI Overlay Layer -->
+    <div id="ui-overlay">
+        <!-- 1. Top Navigation Bar -->
+        <header class="top-nav interactive-ui">
+            <div class="brand-section">
+                <div class="quantum-logo-box">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00F0FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="9"></circle>
+                        <ellipse cx="12" cy="12" rx="9" ry="3.5" transform="rotate(45 12 12)"></ellipse>
+                        <ellipse cx="12" cy="12" rx="9" ry="3.5" transform="rotate(-45 12 12)"></ellipse>
+                        <circle cx="12" cy="12" r="2" fill="#00F0FF"></circle>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1>Quantum Computing <span>Optimization Engine</span></h1>
+                    <div class="brand-subtitle">RURAL MICROGRID 3D ISOMETRIC TWIN // QAOA POWER DISPATCH</div>
+                </div>
+            </div>
+
+            <div class="status-telemetry-group">
+                <div class="status-pill">
+                    <div class="pulse-dot"></div>
+                    <span>GRID: <strong>50.00 Hz STABLE</strong></span>
+                </div>
+                <div class="status-pill">
+                    <div class="pulse-dot orange"></div>
+                    <span>QPU COHERENCE: <strong>99.4%</strong></span>
+                </div>
+            </div>
+
+            <!-- Cinematic Day/Night Control & Add Qubit -->
+            <div class="day-night-control-group">
+                <button id="btn-add-qubit-nav" class="btn-add-qubit" title="Add a new infrastructure node to the microgrid">
+                    <span class="plus-icon">+</span>
+                    <span>Add Qubit</span>
+                </button>
+                <button id="day-night-btn" class="toggle-switch-btn" title="Toggle Day/Night Cinematic Environmental Transition">
+                    <span id="day-night-icon" class="icon">🌙</span>
+                    <span id="day-night-text">NIGHT MODE (ACTIVE)</span>
+                </button>
+                <button id="cinematic-movie-btn" class="cinematic-movie-btn" title="Automated 360-degree City Overview">
+                    <span>🏙️</span> City Overview
+                </button>
+                <button id="btn-energy-flow" class="energy-flow-btn" title="Trigger Cinematic Energy Flow & Audio Sequence">
+                    <span class="bolt-icon">⚡</span> Energy Flow
+                </button>
+            </div>
+        </header>
+
+        <!-- Floating Cinematic Camera Reset Button -->
+        <button id="btn-reset-view" class="floating-reset-btn" title="Return to default full-city isometric view" onclick="window.resetCameraView && window.resetCameraView()">
+            <span class="btn-icon">↩️</span>
+            <span id="reset-view-text" class="btn-text">RESET VIEW (FULL CITY)</span>
+        </button>
+
+        <!-- 2. Center Cinematic Notification Banner -->
+        <div id="cinematic-banner" class="cinematic-banner">
+            <div id="banner-icon" class="banner-icon">🌙</div>
+            <div class="banner-text">
+                <h3 id="banner-title">CINEMATIC NIGHT MODE ENGAGED</h3>
+                <p id="banner-desc">School Curfew Active -> Power Diverted to Hospital (Qubit 0)</p>
+            </div>
+        </div>
+
+        <!-- 3. Middle Telemetry Panels (Left: Grid Balance | Right: Quantum Register) -->
+        <div class="hud-middle-container">
+            <!-- Left Panel: Grid Telemetry -->
+            <div class="hud-panel interactive-ui">
+                <div class="hud-panel-header">
+                    <div class="hud-panel-title">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#00F0FF" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                        Power Balance
+                    </div>
+                    <span class="hud-badge">TELEMETRY</span>
+                </div>
+
+                <div class="metric-row">
+                    <span class="metric-label">Total Generation:</span>
+                    <span id="metric-total-gen" class="metric-val" style="color: #00FF88;">70.0 kW</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Total Load Demand:</span>
+                    <span id="metric-total-load" class="metric-val" style="color: #00F0FF;">60.0 kW</span>
+                </div>
+
+                <div class="progress-track">
+                    <div id="progress-gen-load" class="progress-fill" style="width: 85%;"></div>
+                </div>
+
+                <div class="source-breakdown-list">
+                    <div class="source-item">
+                        <span class="source-name">☀️ Photovoltaic Solar</span>
+                        <span id="val-solar" class="source-val">0.0 kW</span>
+                    </div>
+                    <div class="source-item">
+                        <span class="source-name">💨 Wind Turbine</span>
+                        <span id="val-wind" class="source-val">20.0 kW</span>
+                    </div>
+                    <div class="source-item">
+                        <span class="source-name">🌊 Small Hydro</span>
+                        <span id="val-hydro" class="source-val">25.0 kW</span>
+                    </div>
+                    <div class="source-item">
+                        <span class="source-name">🔋 Battery (BESS)</span>
+                        <span id="val-battery" class="source-val" style="color: #FFAA00;">+25.0 kW (Discharge)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Quantum Qubit Register -->
+            <div class="hud-panel interactive-ui quantum-register-panel" id="quantum-register-panel">
+                <div class="hud-panel-header">
+                    <div class="hud-panel-title">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF0055" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                        Quantum Register
+                    </div>
+                    <span id="qubit-vector-display" class="hud-badge" style="color: #FF0055; border-color: rgba(255,0,85,0.4);">State: |1 0 1 1⟩</span>
+                </div>
+
+                <div class="qubit-grid" id="qubit-register-grid">
+                    <div class="qubit-card q0">
+                        <div class="qubit-top">
+                            <span class="qubit-id" style="color: #FF0033;">Q0: HOSPITAL</span>
+                            <span class="qubit-state-tag">|1⟩ CRITICAL</span>
+                        </div>
+                        <div class="qubit-target">Emergency Hub</div>
+                        <div id="q0-kw" class="qubit-kw">30.0 kW Allocated</div>
+                    </div>
+
+                    <div id="card-q1" class="qubit-card q1 offline">
+                        <div class="qubit-top">
+                            <span class="qubit-id" style="color: #FF7700;">Q1: SCHOOL</span>
+                            <span id="tag-q1" class="qubit-state-tag">|0⟩ CURFEW</span>
+                        </div>
+                        <div class="qubit-target">Education Campus</div>
+                        <div id="q1-kw" class="qubit-kw">0.0 kW (Diverted)</div>
+                    </div>
+
+                    <div class="qubit-card q2">
+                        <div class="qubit-top">
+                            <span class="qubit-id" style="color: #0077FF;">Q2: COMMERCE</span>
+                            <span class="qubit-state-tag">|1⟩ ACTIVE</span>
+                        </div>
+                        <div class="qubit-target">Business Complex</div>
+                        <div id="q2-kw" class="qubit-kw">15.0 kW Allocated</div>
+                    </div>
+
+                    <div class="qubit-card q3">
+                        <div class="qubit-top">
+                            <span class="qubit-id" style="color: #00F0FF;">Q3: RESIDENTIAL</span>
+                            <span class="qubit-state-tag">|1⟩ ACTIVE</span>
+                        </div>
+                        <div class="qubit-target">Eco-Residences</div>
+                        <div id="q3-kw" class="qubit-kw">15.0 kW Allocated</div>
+                    </div>
+                </div>
+
+                <div class="quantum-algorithm-box">
+                    <div><strong>Objective:</strong> min ∑ wᵢ (Dᵢ - xᵢ) s.t. ∑ xᵢ ≤ S</div>
+                    <div><strong>QAOA Solver:</strong> Depth p=1 | 4 Qubits | Local Aer</div>
+                    <div style="color: #94A3B8; margin-top: 3px;">Double-click center hub to open Qiskit Dashboard.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Floating 3D HUD Tooltip (Disabled per specification) -->
+        <div id="hud-tooltip" class="interactive-ui" style="display: none;">
+            <div class="tooltip-header">
+                <div id="tt-title" class="tooltip-title">HOSPITAL (EMERGENCY)</div>
+                <div id="tt-badge" class="tooltip-badge red">Qubit 0 | Life-Critical</div>
+            </div>
+            <div class="tooltip-field">
+                <span class="tooltip-field-label">Facility Type:</span>
+                <span id="tt-type-val" class="tooltip-field-val">Trauma Center & Life-Support</span>
+            </div>
+            <div class="tooltip-field">
+                <span class="tooltip-field-label">Operating Timing:</span>
+                <span id="tt-timing-val" class="tooltip-field-val">24/7 Continuous</span>
+            </div>
+            <div class="tooltip-field">
+                <span class="tooltip-field-label">Power Required:</span>
+                <span id="tt-power-val" class="tooltip-field-val">30.0 kW (Priority Override)</span>
+            </div>
+            <div id="tt-click-hint" class="tooltip-click-hint" style="display: none;">
+                ⚡ DOUBLE-CLICK TO LAUNCH QUANTUM SIMULATION DASHBOARD
+            </div>
+        </div>
+
+        <!-- 5. Bottom Controls Dock -->
+        <footer class="bottom-dock interactive-ui">
+            <div class="dock-group">
+                <span class="dock-label">CAMERA:</span>
+                <button class="dock-btn cam-btn active" data-preset="iso">📐 ISOMETRIC 35°</button>
+                <button class="dock-btn cam-btn" data-preset="top">🗺️ TOP-DOWN GRID</button>
+                <button class="dock-btn cam-btn" data-preset="center">⚛️ QUANTUM CORE</button>
+                <button class="dock-btn cam-btn" data-preset="hospital">🏥 HOSPITAL FOCUS</button>
+            </div>
+
+            <div class="dock-group">
+                <button id="btn-add-qubit-dock" class="btn-add-qubit" style="padding: 6px 14px; font-size: 12px;" title="Deploy a new infrastructure node into the microgrid">
+                    <span class="plus-icon">+</span>
+                    <span>ADD QUBIT</span>
+                </button>
+                <button id="btn-sound-toggle" class="dock-btn" style="display: none;" title="Audio Muted">
+                    <span>🔇</span> <span class="label">MUTED</span>
+                </button>
+                <button id="btn-launch-dashboard" class="action-btn" title="Open Streamlit / Qiskit Simulation Dashboard">
+                    <span>⚡</span> LAUNCH QUANTUM DASHBOARD
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <!-- External Link Modal (Triggers on Click State of Center Hub) -->
+    <div id="dashboard-modal" class="modal-overlay" onclick="if(event.target === this) window.closeDashboardModal && window.closeDashboardModal(event)">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00F0FF" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                    Microgrid Control Center — Quantum Dashboard Link
+                </div>
+                <button id="btn-close-modal" class="modal-close-btn" aria-label="Close" onclick="window.closeDashboardModal && window.closeDashboardModal(event)">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>You clicked the <strong>Microgrid Control Center / Quantum Optimization Engine</strong>. This links directly to our Python &amp; Qiskit simulation dashboard.</p>
+                
+                <label style="display: block; margin-top: 14px; font-weight: 600; font-size: 11px; text-transform: uppercase; color: #94A3B8;">
+                    Target Dashboard URL:
+                </label>
+                <input id="modal-url-input" class="input-field" type="text" value="http://localhost:8501" />
+
+                <div class="code-pill">
+                    <span>streamlit run app.py</span>
+                    <span style="color: #94A3B8; font-size: 11px;">(Command to run Streamlit in QuantumV1-main)</span>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-save-url" class="action-btn">
+                    <span>🚀</span> OPEN DASHBOARD (NEW TAB)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Qubit Node Customization / Edit Modal (Click-to-Edit for all Qubits) -->
+    <div id="qubit-edit-modal" class="modal-overlay" onclick="if(event.target === this) window.closeQubitEditModal && window.closeQubitEditModal(event)">
+        <div class="modal-card" style="width: 500px;">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span id="modal-node-icon" style="font-size: 20px;">🏥</span>
+                    <span id="modal-node-title">Edit Infrastructure Node</span>
+                </div>
+                <button id="btn-close-edit-modal" class="modal-close-btn" aria-label="Close" onclick="window.closeQubitEditModal && window.closeQubitEditModal(event)">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Facility Name / Label</label>
+                    <input id="edit-node-name" class="input-field" type="text" value="" />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Priority Level (Qubit Weight)</label>
+                    <select id="edit-node-priority" class="input-field" style="background: rgba(14,21,33,0.9); cursor: pointer;">
+                        <option value="Very High">Very High Priority (Weight: 100 - Critical)</option>
+                        <option value="High">High Priority (Weight: 50 - Essential)</option>
+                        <option value="Medium">Medium Priority (Weight: 30 - Commercial)</option>
+                        <option value="Low">Low Priority (Weight: 10 - Standard)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label class="form-label" style="margin-bottom: 0;">Required Power (kW)</label>
+                        <span id="edit-power-val-label" style="font-family: var(--font-mono); font-weight: 700; color: var(--neon-cyan);">30.0 kW</span>
+                    </div>
+                    <div class="slider-container">
+                        <input id="edit-node-power-slider" class="range-slider" type="range" min="5" max="100" step="1" value="30" />
+                        <input id="edit-node-power-input" class="input-field" type="number" min="1" max="200" step="0.5" style="width: 85px; margin: 0;" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Working Hours (Operating Schedule)</label>
+                    <input id="edit-node-hours" class="input-field" type="text" placeholder="e.g. 08:00 - 16:00 or 24/7" style="margin-bottom: 6px;" />
+                    <div class="chips-row">
+                        <button class="chip-btn" data-hours="24/7">⚡ 24/7 Continuous</button>
+                        <button class="chip-btn" data-hours="08:00 - 16:00">☀️ Day: 08:00–16:00</button>
+                        <button class="chip-btn" data-hours="09:00 - 21:00">🏢 Commercial: 09:00–21:00</button>
+                        <button class="chip-btn" data-hours="17:00 - 23:00">🌙 Evening Peak: 17:00–23:00</button>
+                    </div>
+                </div>
+
+                <div id="modal-status-pill" class="code-pill" style="margin-top: 10px;">
+                    <span id="modal-dispatch-status">⚡ Status: 100% Demand Met (Energized)</span>
+                    <span id="modal-qubit-id" style="color: var(--neon-cyan); font-weight: 700;">QUBIT 0</span>
+                </div>
+            </div>
+            <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center;">
+                <button id="btn-delete-node" class="danger-btn" style="display: none;">
+                    <span>🗑️</span> Remove Node
+                </button>
+                <div style="display: flex; gap: 10px; margin-left: auto;">
+                    <button id="btn-cancel-edit" class="dock-btn" onclick="window.closeQubitEditModal && window.closeQubitEditModal(event)">Cancel</button>
+                    <button id="btn-save-edit" class="action-btn">
+                        <span>💾</span> Apply &amp; Re-Optimize
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Qubit Modal (Dynamic Node Addition) -->
+    <div id="add-qubit-modal" class="modal-overlay" onclick="if(event.target === this) window.closeAddQubitModal && window.closeAddQubitModal(event)">
+        <div class="modal-card" style="width: 560px;">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span style="font-size: 20px;">⚡</span>
+                    Deploy New Infrastructure Node (+ Qubit)
+                </div>
+                <button id="btn-close-add-modal" class="modal-close-btn" aria-label="Close" onclick="window.closeAddQubitModal && window.closeAddQubitModal(event)">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 12px; margin-bottom: 12px;">Choose a facility archetype or customize specifications to integrate a new Qubit into the QAOA microgrid dispatch matrix.</p>
+
+                <div class="templates-grid">
+                    <div class="template-card selected" data-template="factory">
+                        <div class="template-header">
+                            <span>🏭</span>
+                            <span>Industrial Factory</span>
+                        </div>
+                        <div class="template-specs">25 kW • High Priority • 07:00–17:00</div>
+                    </div>
+                    <div class="template-card" data-template="datacenter">
+                        <div class="template-header">
+                            <span>💻</span>
+                            <span>Quantum AI Data Center</span>
+                        </div>
+                        <div class="template-specs">35 kW • High Priority • 24/7</div>
+                    </div>
+                    <div class="template-card" data-template="evhub">
+                        <div class="template-header">
+                            <span>⚡</span>
+                            <span>EV Fast-Charging Hub</span>
+                        </div>
+                        <div class="template-specs">25 kW • Medium Priority • 06:00–22:00</div>
+                    </div>
+                    <div class="template-card" data-template="water">
+                        <div class="template-header">
+                            <span>💧</span>
+                            <span>Water Purification Plant</span>
+                        </div>
+                        <div class="template-specs">18 kW • Very High • 24/7</div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label class="form-label">Facility Name</label>
+                    <input id="add-node-name" class="input-field" type="text" value="Industrial Smart Factory" />
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Required Power (kW)</label>
+                        <input id="add-node-power" class="input-field" type="number" min="5" max="100" value="25.0" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Working Hours</label>
+                        <input id="add-node-hours" class="input-field" type="text" value="07:00 - 17:00" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Priority Level</label>
+                    <select id="add-node-priority" class="input-field" style="background: rgba(14,21,33,0.9); cursor: pointer;">
+                        <option value="Very High">Very High Priority (Weight: 100 - Life-Critical)</option>
+                        <option value="High" selected>High Priority (Weight: 50 - Essential Service)</option>
+                        <option value="Medium">Medium Priority (Weight: 30 - Commercial/Industrial)</option>
+                        <option value="Low">Low Priority (Weight: 10 - Standard/Residential)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-cancel-add" class="dock-btn" onclick="window.closeAddQubitModal && window.closeAddQubitModal(event)">Cancel</button>
+                <button id="btn-confirm-add" class="btn-add-qubit" style="border-radius: 8px;">
+                    <span>⚡</span> Deploy to Microgrid
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Scripts -->
+    <script src="textures.js"></script>
+    <script src="audio.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

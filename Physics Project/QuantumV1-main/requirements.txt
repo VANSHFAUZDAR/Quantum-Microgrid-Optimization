@@ -1,0 +1,11 @@
+numpy
+pandas
+scipy
+streamlit
+matplotlib
+plotly
+pytest
+qiskit
+qiskit-aer
+qiskit-optimization
+qiskit-algorithms

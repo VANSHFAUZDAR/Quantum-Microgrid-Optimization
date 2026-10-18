@@ -1,0 +1,546 @@
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+import os
+import time
+
+from quantum_energy_optimizer.models import PowerSource, Load
+from quantum_energy_optimizer.grid import SmartGrid
+from quantum_energy_optimizer.experiment_runner import run_experiment
+from quantum_energy_optimizer.config import PRIORITY_WEIGHTS, MAX_QUANTUM_QUBITS, DEFAULT_POWER_GRANULARITY, RUNS_DIR
+
+st.set_page_config(page_title="Q-Energy Optimizer", layout="wide", initial_sidebar_state="collapsed")
+
+# Injecting the GridNest custom aesthetic
+st.markdown("""
+<style>
+    /* Base theme overrides */
+    .stApp {
+        background-color: #0B0E14;
+        color: #FFFFFF;
+    }
+    
+    /* Top Bar area */
+    .gn-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 0 30px 0;
+        border-bottom: 1px solid #151A22;
+        margin-bottom: 30px;
+    }
+    .gn-logo {
+        font-size: 20px;
+        font-weight: 600;
+        color: #FFFFFF;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .gn-logo-icon {
+        color: #00F0FF;
+        font-size: 24px;
+    }
+    
+    .gn-metrics-row {
+        display: flex;
+        gap: 40px;
+    }
+    .gn-metric {
+        display: flex;
+        flex-direction: column;
+    }
+    .gn-metric-title {
+        color: #8B95A5;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .gn-metric-title i { color: #00F0FF; }
+    .gn-metric-val {
+        color: #FFFFFF;
+        font-size: 20px;
+        font-weight: 500;
+    }
+    
+    /* Main Typography */
+    .gn-hero-title {
+        font-size: 48px;
+        font-weight: 300;
+        line-height: 1.1;
+        margin-bottom: 16px;
+        color: #FFFFFF;
+    }
+    .gn-hero-sub {
+        color: #8B95A5;
+        font-size: 16px;
+        max-width: 400px;
+        line-height: 1.5;
+        margin-bottom: 40px;
+    }
+    
+    /* Cards */
+    .gn-card {
+        background-color: #151A22;
+        border-radius: 16px;
+        padding: 24px;
+        border: 1px solid #1E2530;
+        margin-bottom: 24px;
+        height: 100%;
+    }
+    .gn-card-title {
+        color: #FFFFFF;
+        font-size: 16px;
+        font-weight: 400;
+        margin-bottom: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    /* Progress Bars for Grid Network */
+    .gn-zone {
+        margin-bottom: 20px;
+    }
+    .gn-zone-header {
+        display: flex;
+        justify-content: space-between;
+        color: #8B95A5;
+        font-size: 13px;
+        margin-bottom: 8px;
+    }
+    .gn-zone-name { color: #FFFFFF; }
+    .gn-track {
+        width: 100%;
+        height: 4px;
+        background-color: #1E2530;
+        border-radius: 2px;
+        display: flex;
+        overflow: hidden;
+    }
+    .gn-fill-cyan {
+        height: 100%;
+        background-color: #00F0FF;
+        box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+    }
+    .gn-fill-orange {
+        height: 100%;
+        background-color: #FF9F43;
+        box-shadow: 0 0 10px rgba(255, 159, 67, 0.4);
+    }
+    
+    /* Status Badge */
+    .gn-badge {
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        border: 1px solid #1E2530;
+    }
+    .badge-cyan { border-color: #00F0FF; color: #00F0FF; }
+    .badge-orange { border-color: #FF9F43; color: #FF9F43; }
+    
+    /* Small tables */
+    .gn-kv-row {
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 1px solid #1E2530;
+        padding: 12px 0;
+        font-size: 13px;
+    }
+    .gn-kv-key { color: #8B95A5; }
+    .gn-kv-val { color: #FFFFFF; }
+    
+    /* Hide some streamlit native elements */
+    button[title="View fullscreen"] {display: none;}
+    
+    /* Adjust tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 24px;
+        background-color: transparent;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        background-color: transparent;
+        border-radius: 4px 4px 0px 0px;
+        gap: 1px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        color: #8B95A5;
+    }
+    .stTabs [aria-selected="true"] {
+        color: #00F0FF !important;
+        border-bottom: 2px solid #00F0FF !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+def initialize_state():
+    if "grid" not in st.session_state:
+        st.session_state.grid = SmartGrid()
+        st.session_state.grid.add_source(PowerSource("Main Grid", "Grid", 100))
+        st.session_state.grid.add_load(Load("Hospital", 40, "Critical"))
+        st.session_state.grid.add_load(Load("School", 30, "High"))
+        st.session_state.grid.add_load(Load("Residential", 25, "Medium"))
+        st.session_state.grid.add_load(Load("Industry", 15, "Low"))
+    if "results" not in st.session_state:
+        st.session_state.results = None
+    if "app_status" not in st.session_state:
+        st.session_state.app_status = "READY"
+
+def render_top_bar():
+    res = st.session_state.results
+    
+    if res and res["quantum_res"] is not None and res["quantum_res"]["feasible"]:
+        record = res["record"]
+        supply = record['total_supply']
+        demand = record['total_demand']
+        alloc = record['quantum_allocated']
+        utilization = (alloc / supply * 100) if supply > 0 else 0
+        satisfaction = (alloc / demand * 100) if demand > 0 else 100
+    elif res:
+        record = res["record"]
+        supply = record['total_supply']
+        demand = record['total_demand']
+        alloc = record['classical_allocated']
+        utilization = (alloc / supply * 100) if supply > 0 else 0
+        satisfaction = (alloc / demand * 100) if demand > 0 else 100
+    else:
+        grid = st.session_state.grid
+        supply = grid.get_total_supply()
+        demand = grid.get_total_demand()
+        alloc = 0
+        utilization = 0
+        satisfaction = 0
+
+    st.markdown(f"""
+    <div class="gn-topbar">
+        <div class="gn-logo">
+            <span class="gn-logo-icon">⚡</span> Q-ENERGY
+        </div>
+        <div class="gn-metrics-row">
+            <div class="gn-metric">
+                <div class="gn-metric-title">⚡ Available Supply</div>
+                <div class="gn-metric-val">{supply} kW</div>
+            </div>
+            <div class="gn-metric">
+                <div class="gn-metric-title">⏱ Active Demand</div>
+                <div class="gn-metric-val">{demand} kW</div>
+            </div>
+            <div class="gn-metric">
+                <div class="gn-metric-title">✓ Satisfaction</div>
+                <div class="gn-metric-val">{satisfaction:.1f}%</div>
+            </div>
+            <div class="gn-metric">
+                <div class="gn-metric-title">↗ Utilization</div>
+                <div class="gn-metric-val">{utilization:.1f}%</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+def render_simulation():
+    grid = st.session_state.grid
+    
+    c_left, c_right = st.columns([1.2, 1])
+    
+    with c_left:
+        st.markdown("<div class='gn-hero-title'>Smart Energy<br>Infrastructure</div>", unsafe_allow_html=True)
+        st.markdown("<div class='gn-hero-sub'>Optimize clean energy distribution and grid performance in real time using quantum-inspired QUBO models.</div>", unsafe_allow_html=True)
+        
+        with st.container():
+            st.markdown("<div class='gn-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='gn-card-title'>Grid Configuration</div>", unsafe_allow_html=True)
+            
+            c_inp1, c_inp2 = st.columns(2)
+            new_supply = c_inp1.number_input("Available Supply (kW)", min_value=0.0, value=float(grid.get_total_supply()), step=10.0)
+            granularity = c_inp2.number_input("Granularity (kW)", min_value=1.0, value=float(DEFAULT_POWER_GRANULARITY), step=1.0)
+            
+            run_quantum = st.checkbox("Run QAOA Quantum Simulation", value=True)
+            
+            st.markdown("<div style='margin-top:20px; margin-bottom:10px; color:#8B95A5; font-size:13px;'>Active Loads</div>", unsafe_allow_html=True)
+            
+            load_data = [{"Name": l.name, "Demand (kW)": l.demand_kw, "Priority": l.priority} for l in grid.loads]
+            edited_loads = st.data_editor(
+                load_data, 
+                num_rows="dynamic", 
+                key="sim_loads_editor",
+                use_container_width=True,
+                column_config={
+                    "Priority": st.column_config.SelectboxColumn(
+                        "Priority", options=["Critical", "High", "Medium", "Low"], required=True
+                    )
+                }
+            )
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Action
+            if st.button("⚡ OPTIMIZE GRID", use_container_width=True, type="primary"):
+                st.session_state.app_status = "OPTIMIZING"
+                st.rerun()
+
+    # Apply configuration
+    grid.clear()
+    grid.add_source(PowerSource("Main", "Grid", new_supply))
+    for l in edited_loads:
+        if l.get("Name") and l.get("Demand (kW)") is not None:
+            grid.add_load(Load(l["Name"], float(l["Demand (kW)"]), l.get("Priority", "Low")))
+
+    if st.session_state.app_status == "OPTIMIZING":
+        render_optimization_process(grid, granularity, run_quantum)
+
+    # Right Column: Results Visualization
+    with c_right:
+        res = st.session_state.results
+        if res and st.session_state.app_status == "OPTIMIZATION COMPLETE":
+            # Determine which result to show based on REAL solver success
+            display_q = res["quantum_res"] is not None and res["quantum_res"]["feasible"]
+            allocations = res["quantum_res"]["allocations"] if display_q else res["classical_res"]["allocations"]
+            
+            st.markdown("<div class='gn-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='gn-card-title'>Smart grid network allocation</div>", unsafe_allow_html=True)
+            
+            html_bars = ""
+            for l in grid.loads:
+                demand = l.demand_kw
+                alloc = allocations.get(l.name, 0)
+                unmet = demand - alloc
+                
+                pct_alloc = (alloc / demand * 100) if demand > 0 else 0
+                pct_unmet = (unmet / demand * 100) if demand > 0 else 0
+                
+                html_bars += f"""
+                <div class="gn-zone">
+                    <div class="gn-zone-header">
+                        <span class="gn-zone-name">{l.name} <span style="color:#8B95A5; font-size:11px; margin-left:8px;">{l.priority}</span></span>
+                        <span>{alloc:.0f} / {demand:.0f} kW</span>
+                    </div>
+                    <div class="gn-track">
+                        <div class="gn-fill-cyan" style="width: {pct_alloc}%;"></div>
+                        <div class="gn-fill-orange" style="width: {pct_unmet}%;"></div>
+                    </div>
+                </div>
+                """
+            st.markdown(html_bars, unsafe_allow_html=True)
+            
+            if display_q:
+                st.markdown("<div style='margin-top:20px; font-size:12px; color:#00F0FF;'>● QAOA Quantum Allocation Displayed</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("<div style='margin-top:20px; font-size:12px; color:#FF9F43;'>● Classical Fallback Displayed</div>", unsafe_allow_html=True)
+                if res["quantum_res"]:
+                    st.markdown(f"<div style='font-size:11px; color:#ef4444; margin-top:4px;'>{res['quantum_res'].get('status', 'Quantum simulation aborted')}</div>", unsafe_allow_html=True)
+                    
+            st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            # Empty state for bars
+            st.markdown("<div class='gn-card' style='opacity: 0.5;'>", unsafe_allow_html=True)
+            st.markdown("<div class='gn-card-title'>Smart grid network allocation</div>", unsafe_allow_html=True)
+            st.markdown("<div style='color:#8B95A5; font-size:13px; text-align:center; padding: 40px 0;'>Awaiting Optimization...</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # Bottom Row
+    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+    b1, b2, b3 = st.columns(3)
+    
+    res = st.session_state.results
+    if res and st.session_state.app_status == "OPTIMIZATION COMPLETE":
+        with b1:
+            st.markdown("<div class='gn-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='gn-card-title'>Quantum Optimization <span class='gn-badge badge-cyan'>QAOA</span></div>", unsafe_allow_html=True)
+            
+            if res["quantum_res"]:
+                q_feas = res["quantum_res"]["feasible"]
+                q_stat = "SUCCESS" if q_feas else "FAILED"
+                st.markdown(f"""
+                <div class="gn-kv-row"><span class="gn-kv-key">Simulator</span><span class="gn-kv-val">Statevector</span></div>
+                <div class="gn-kv-row"><span class="gn-kv-key">Qubits</span><span class="gn-kv-val">{res['quantum_res'].get('qubits', 'N/A')}</span></div>
+                <div class="gn-kv-row"><span class="gn-kv-key">Runtime</span><span class="gn-kv-val">{res['quantum_res']['runtime']:.4f} s</span></div>
+                <div class="gn-kv-row"><span class="gn-kv-key">Objective</span><span class="gn-kv-val">{res['quantum_res']['objective']:.2f}</span></div>
+                <div class="gn-kv-row" style="border:none;"><span class="gn-kv-key">Status</span><span class="gn-kv-val" style="color:{'#00F0FF' if q_feas else '#ef4444'}">{q_stat}</span></div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("<div style='color:#8B95A5; font-size:13px;'>Skipped by configuration.</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with b2:
+            st.markdown("<div class='gn-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='gn-card-title'>Solver Comparison <span class='gn-badge badge-orange'>Analysis</span></div>", unsafe_allow_html=True)
+            
+            q_obj = res['quantum_res']['objective'] if (res['quantum_res'] and res['quantum_res']['feasible']) else 0
+            c_obj = res['classical_res']['objective']
+            
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=['QAOA', 'MILP'], y=[q_obj, c_obj], marker_color=['#00F0FF', '#FF9F43'], width=0.4))
+            fig.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                font_color="#8B95A5", height=180, margin=dict(l=0, r=0, t=10, b=0),
+                yaxis=dict(title="Penalty", gridcolor="#1E2530")
+            )
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with b3:
+            st.markdown("<div class='gn-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='gn-card-title'>Classical Reference <span class='gn-badge badge-cyan'>MILP</span></div>", unsafe_allow_html=True)
+            c_feas = res["classical_metrics"]["feasible"]
+            st.markdown(f"""
+            <div class="gn-kv-row"><span class="gn-kv-key">Solver</span><span class="gn-kv-val">SciPy Exact</span></div>
+            <div class="gn-kv-row"><span class="gn-kv-key">Runtime</span><span class="gn-kv-val">{res['classical_res']['runtime']:.4f} s</span></div>
+            <div class="gn-kv-row"><span class="gn-kv-key">Objective</span><span class="gn-kv-val">{res['classical_res']['objective']:.2f}</span></div>
+            <div class="gn-kv-row" style="border:none;"><span class="gn-kv-key">Feasibility</span><span class="gn-kv-val" style="color:{'#00F0FF' if c_feas else '#ef4444'}">{"VALID" if c_feas else "INVALID"}</span></div>
+            """, unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:10px; font-size:11px; color:#8B95A5; line-height:1.4;'>The classical solver provides an exact reference solution to evaluate QAOA performance.</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+def render_optimization_process(grid, granularity, run_quantum):
+    st.markdown("<div class='gn-card' style='text-align:center;'>", unsafe_allow_html=True)
+    st.markdown("<div style='color:#00F0FF; font-size:18px; margin-bottom:20px;'>Initializing Solvers...</div>", unsafe_allow_html=True)
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    status_text.markdown("<span style='color:#8B95A5'>Constructing QUBO model...</span>", unsafe_allow_html=True)
+    time.sleep(0.3)
+    progress_bar.progress(30)
+    
+    if run_quantum:
+        status_text.markdown("<span style='color:#8B95A5'>Executing QAOA sequence...</span>", unsafe_allow_html=True)
+    else:
+        status_text.markdown("<span style='color:#8B95A5'>QAOA skipped...</span>", unsafe_allow_html=True)
+        
+    try:
+        results = run_experiment(grid, "Dashboard_Run", granularity=granularity, run_qaoa=run_quantum)
+        progress_bar.progress(70)
+        status_text.markdown("<span style='color:#8B95A5'>Solving classical MILP reference...</span>", unsafe_allow_html=True)
+        time.sleep(0.3)
+        
+        st.session_state.results = results
+        st.session_state.app_status = "OPTIMIZATION COMPLETE"
+        progress_bar.progress(100)
+        status_text.markdown("<span style='color:#00F0FF'>Complete</span>", unsafe_allow_html=True)
+        time.sleep(0.2)
+        st.rerun()
+    except Exception as e:
+        st.session_state.app_status = "ERROR"
+        st.error(f"Error: {str(e)}")
+        st.stop()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+def render_experiments():
+    st.markdown("<div class='gn-hero-title'>Research Experiments</div>", unsafe_allow_html=True)
+    
+    e1, e2 = st.columns(2)
+    
+    with e1:
+        st.markdown("<div class='gn-card'>", unsafe_allow_html=True)
+        st.markdown("<div class='gn-card-title'>Exp 1: Supply Stress Test <span class='gn-badge badge-cyan'>SCALABILITY</span></div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#8B95A5; font-size:14px; margin-bottom:20px;'>Evaluates how unmet demand shifts as total available supply degrades from surplus to severe shortage.</div>", unsafe_allow_html=True)
+        if st.button("Execute Stress Test", key="btn_exp1"):
+            with st.spinner("Running scenarios..."):
+                grid = SmartGrid()
+                grid.add_load(Load("Critical", 40, "Critical"))
+                grid.add_load(Load("High", 30, "High"))
+                grid.add_load(Load("Low", 30, "Low"))
+                results = []
+                for s in [120, 100, 70, 40]:
+                    grid.clear()
+                    grid.add_source(PowerSource("Grid", "Grid", s))
+                    grid.add_load(Load("Critical", 40, "Critical"))
+                    grid.add_load(Load("High", 30, "High"))
+                    grid.add_load(Load("Low", 30, "Low"))
+                    res = run_experiment(grid, f"Exp1_{s}", granularity=10.0, run_qaoa=False)
+                    results.append({"Supply": s, "Unmet Demand": res["classical_metrics"]["unmet_demand"]})
+                    
+                df = pd.DataFrame(results)
+                fig = px.line(df, x="Supply", y="Unmet Demand", markers=True)
+                fig.update_traces(line_color="#FF9F43", marker=dict(size=8))
+                fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#8B95A5", height=250, margin=dict(l=0, r=0, t=10, b=0), xaxis=dict(gridcolor="#1E2530", title="Available Supply (kW)"), yaxis=dict(gridcolor="#1E2530", title="Total Unmet Demand (kW)"))
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    with e2:
+        st.markdown("<div class='gn-card'>", unsafe_allow_html=True)
+        st.markdown("<div class='gn-card-title'>Exp 4: Discretization Resolution <span class='gn-badge badge-orange'>COMPLEXITY</span></div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#8B95A5; font-size:14px; margin-bottom:20px;'>Measures the exponential cost in required Qubits when attempting to simulate finer power granularities.</div>", unsafe_allow_html=True)
+        if st.button("Execute Resolution Test", key="btn_exp4"):
+            with st.spinner("Analyzing resolutions..."):
+                grid = SmartGrid()
+                grid.add_source(PowerSource("Grid", "Grid", 50))
+                grid.add_load(Load("L1", 25, "Critical"))
+                grid.add_load(Load("L2", 35, "Low"))
+                results = []
+                for g in [25.0, 10.0, 5.0]:
+                    res = run_experiment(grid, f"Exp4_{g}", granularity=g, run_qaoa=False)
+                    q_vars = sum([int(l.demand_kw/g) for l in grid.loads]) + int(50/g) # approximate formula for display
+                    results.append({"Granularity (kW)": str(g), "Qubits": q_vars})
+                    
+                df = pd.DataFrame(results)
+                fig = px.bar(df, x="Granularity (kW)", y="Qubits")
+                fig.update_traces(marker_color="#00F0FF")
+                fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#8B95A5", height=250, margin=dict(l=0, r=0, t=10, b=0), yaxis=dict(gridcolor="#1E2530", title="Required Qubits"))
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='gn-card'>", unsafe_allow_html=True)
+    st.markdown("<div class='gn-card-title'>Experiment Log</div>", unsafe_allow_html=True)
+    csv_path = os.path.join(RUNS_DIR, "experiment_history.csv")
+    if os.path.exists(csv_path):
+        df = pd.read_csv(csv_path)
+        cols = ["run_id", "scenario_name", "total_supply", "total_demand", "quantum_variable_count", "quantum_feasible", "quantum_objective", "classical_objective"]
+        avail_cols = [c for c in cols if c in df.columns]
+        st.dataframe(df[avail_cols], use_container_width=True, hide_index=True)
+        with open(csv_path, "rb") as file:
+            st.download_button("Export CSV", file, file_name="experiment_history.csv")
+    else:
+        st.info("No logs found.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+def render_methodology():
+    st.markdown("<div class='gn-hero-title'>Methodology</div>", unsafe_allow_html=True)
+    st.markdown("<div class='gn-hero-sub'>Understanding the data flow from physical grid constraints to quantum Hamiltonian simulation.</div>", unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class='gn-card'>
+    <div class='gn-card-title'>Optimization Pipeline</div>
+    <div style='color:#8B95A5; font-size:14px; font-family:monospace; line-height:2.2;'>
+    <div style='color:#00F0FF'>1. GRID INPUT</div>
+    Available capacity vs node demand.<br><br>
+    
+    <div style='color:#FFFFFF'>2. LOAD DEMAND + PRIORITY</div>
+    Critical infrastructure is assigned high mathematical weights.<br><br>
+    
+    <div style='color:#FFFFFF'>3. OPTIMIZATION MODEL</div>
+    Objective: Minimize Σ(Priority Weight × Unmet Demand).<br><br>
+    
+    <div style='color:#FFFFFF'>4. DISCRETIZATION</div>
+    Continuous power (kW) is partitioned into fixed chunks, becoming binary variables.<br><br>
+    
+    <div style='color:#00F0FF'>5. QUBO FORMULATION</div>
+    Constraints (Allocated ≤ Supply) are mapped as quadratic penalties.<br><br>
+    
+    <div style='color:#FF9F43'>6. QAOA SIMULATION</div>
+    The QUBO is evaluated as an Ising Hamiltonian via classical Statevector simulation.<br><br>
+    
+    <div style='color:#FFFFFF'>7. CLASSICAL REFERENCE</div>
+    A SciPy MILP exact solver computes the absolute optimal baseline.
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Main App Execution
+initialize_state()
+render_top_bar()
+
+t1, t2, t3 = st.tabs(["SIMULATION", "EXPERIMENTS", "METHODOLOGY"])
+
+with t1:
+    render_simulation()
+with t2:
+    render_experiments()
+with t3:
+    render_methodology()
